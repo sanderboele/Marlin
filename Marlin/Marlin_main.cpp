@@ -13806,11 +13806,18 @@ void setup() {
       pe_deactivate_magnet(1);
     #endif
   #endif
+
   #if ENABLED(MKS_12864OLED) || ENABLED(MKS_12864OLED_SSD1306)
     SET_OUTPUT(LCD_PINS_DC);
     OUT_WRITE(LCD_PINS_RS, LOW);
     delay(1000);
     WRITE(LCD_PINS_RS, HIGH);
+  #endif
+
+  #ifdef OSCILLOSCOPE_PIN_A
+    SERIAL_ECHOLNPGM("OSCILLOSCOPE_PIN_A = " STRINGIFY(OSCILLOSCOPE_PIN_A));
+    pinMode(OSCILLOSCOPE_PIN_A, OUTPUT);
+    digitalWrite(OSCILLOSCOPE_PIN_A, LOW);
   #endif
 }
 
@@ -13825,6 +13832,13 @@ void setup() {
  *  - Call LCD update
  */
 void loop() {
+
+  // #ifdef OSCILLOSCOPE_PIN_A
+  //   static uint8_t test_state = HIGH;
+  //   WRITE(OSCILLOSCOPE_PIN_A, test_state);
+  //   test_state = HIGH - test_state;
+  // #endif
+
   if (commands_in_queue < BUFSIZE) get_available_commands();
 
   #if ENABLED(SDSUPPORT)
