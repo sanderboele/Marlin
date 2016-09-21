@@ -295,7 +295,6 @@ void report_current_position();
 
 #if IS_KINEMATIC
   extern float delta[ABC];
-  void inverse_kinematics(const float raw[XYZ]);
 #endif
 
 #if ENABLED(DELTA)
@@ -335,6 +334,11 @@ void report_current_position();
   }while(0)
 
 #elif IS_SCARA
+  #if ENABLED(MAKERARM_SCARA)
+    void inverse_kinematics(const float raw[XYZ], const float probe_y_offset=0.0);
+  #elif ENABLED(MORGAN_SCARA)
+    void inverse_kinematics(const float raw[XYZ]);
+  #endif
   void forward_kinematics_SCARA(const float &a, const float &b);
 #endif
 
@@ -493,29 +497,67 @@ void do_blocking_move_to_xy(const float &x, const float &y, const float &fr_mm_s
     extern const float L1, L2;
   #endif
 
-  inline bool position_is_reachable(const float &rx, const float &ry) {
-    #if ENABLED(DELTA)
-      return HYPOT2(rx, ry) <= sq(DELTA_PRINTABLE_RADIUS);
-    #elif IS_SCARA
-      #if MIDDLE_DEAD_ZONE_R > 0
-        const float R2 = HYPOT2(rx - SCARA_OFFSET_X, ry - SCARA_OFFSET_Y);
-        return R2 >= sq(float(MIDDLE_DEAD_ZONE_R)) && R2 <= sq(L1 + L2);
-      #else
-        return HYPOT2(rx - SCARA_OFFSET_X, ry - SCARA_OFFSET_Y) <= sq(L1 + L2);
+  #if ENABLED(MAKERARM_SCARA)
+
+    bool position_is_reachable(const float target[XYZ]
+      #if HAS_BED_PROBE
+        , bool by_probe=false
       #endif
-    #else // CARTESIAN
-      // To be migrated from MakerArm branch in future
+    );
+
+    #if HAS_BED_PROBE
+
+      FORCE_INLINE bool position_is_reachable_by_probe(const float &rx, const float &ry) {
+        const float target[XYZ] = { rx, ry, 0 };
+        return position_is_reachable(target, true);
+      }
+
     #endif
-  }
 
-  inline bool position_is_reachable_by_probe(const float &rx, const float &ry) {
+    FORCE_INLINE bool position_is_reachable(const float &rx, const float &ry
+      #if HAS_BED_PROBE
+        , bool by_probe=false
+      #endif
+    ) {
+      const float target[XYZ] = { rx, ry, 0 };
+      return position_is_reachable(target
+        #if HAS_BED_PROBE
+           , by_probe
+        #endif
+      );
+    }
 
-    // Both the nozzle and the probe must be able to reach the point.
-    // This won't work on SCARA since the probe offset rotates with the arm.
+  #else
 
-    return position_is_reachable(rx, ry)
-        && position_is_reachable(rx - (X_PROBE_OFFSET_FROM_EXTRUDER), ry - (Y_PROBE_OFFSET_FROM_EXTRUDER));
-  }
+    inline bool position_is_reachable(const float &rx, const float &ry) {
+      #if ENABLED(DELTA)
+        return HYPOT2(rx, ry) <= sq(DELTA_PRINTABLE_RADIUS);
+      #elif IS_SCARA
+        #if MIDDLE_DEAD_ZONE_R > 0
+          const float R2 = HYPOT2(rx - SCARA_OFFSET_X, ry - SCARA_OFFSET_Y);
+          return R2 >= sq(float(MIDDLE_DEAD_ZONE_R)) && R2 <= sq(L1 + L2);
+        #else
+          return HYPOT2(rx - SCARA_OFFSET_X, ry - SCARA_OFFSET_Y) <= sq(L1 + L2);
+        #endif
+      #else // CARTESIAN
+        // To be migrated from MakerArm branch in future
+      #endif
+    }
+
+    #if HAS_BED_PROBE
+
+      inline bool position_is_reachable_by_probe(const float &rx, const float &ry) {
+
+        // Both the nozzle and the probe must be able to reach the point.
+        // This won't work on SCARA since the probe offset rotates with the arm.
+
+        return position_is_reachable(rx, ry)
+            && position_is_reachable(rx - (X_PROBE_OFFSET_FROM_EXTRUDER), ry - (Y_PROBE_OFFSET_FROM_EXTRUDER));
+      }
+
+    #endif
+
+  #endif
 
 #else // CARTESIAN
 
@@ -525,11 +567,15 @@ void do_blocking_move_to_xy(const float &x, const float &y, const float &fr_mm_s
           && WITHIN(ry, Y_MIN_POS - 0.001, Y_MAX_POS + 0.001);
   }
 
-  inline bool position_is_reachable_by_probe(const float &rx, const float &ry) {
-      // Add 0.001 margin to deal with float imprecision
-      return WITHIN(rx, MIN_PROBE_X - 0.001, MAX_PROBE_X + 0.001)
-          && WITHIN(ry, MIN_PROBE_Y - 0.001, MAX_PROBE_Y + 0.001);
-  }
+  #if HAS_BED_PROBE
+
+    inline bool position_is_reachable_by_probe(const float &rx, const float &ry) {
+        // Add 0.001 margin to deal with float imprecision
+        return WITHIN(rx, MIN_PROBE_X - 0.001, MAX_PROBE_X + 0.001)
+            && WITHIN(ry, MIN_PROBE_Y - 0.001, MAX_PROBE_Y + 0.001);
+    }
+
+  #endif
 
 #endif // CARTESIAN
 
