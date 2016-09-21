@@ -5099,6 +5099,10 @@ void home_all_axes() { gcode_G28(true); }
 
         // Is there a next point to move to?
         if (abl_probe_index < abl2) {
+          #if ENABLED(MAKERARM_SCARA)
+            if (xCount == abl_grid_points_x / 2 && yCount == abl_grid_points_y - 1)
+              arm_orientation = RIGHT_ARM;
+          #endif
           _manual_goto_xy(xProbe, yProbe); // Can be used here too!
           #if HAS_SOFTWARE_ENDSTOPS
             // Disable software endstops to allow manual adjustment
@@ -5167,7 +5171,13 @@ void home_all_axes() { gcode_G28(true); }
 
       #if ABL_GRID
 
-        bool zig = PR_OUTER_END & 1;  // Always end at RIGHT and BACK_PROBE_BED_POSITION
+        bool zig =
+          #if ENABLED(MAKERARM_SCARA)
+            true
+          #else
+            PR_OUTER_END & 1  // Always end at RIGHT and BACK_PROBE_BED_POSITION
+          #endif
+        ;
 
         measured_z = 0;
 
@@ -5200,6 +5210,11 @@ void home_all_axes() { gcode_G28(true); }
 
             #if ENABLED(AUTO_BED_LEVELING_LINEAR)
               indexIntoAB[xCount][yCount] = ++abl_probe_index; // 0...
+            #endif
+
+            #if ENABLED(MAKERARM_SCARA)
+              if (xCount == abl_grid_points_x / 2 && yCount == abl_grid_points_y - 1)
+                arm_orientation = RIGHT_ARM;
             #endif
 
             #if IS_KINEMATIC
