@@ -688,6 +688,11 @@ float cartes[XYZ] = { 0 };
 
   ToolType tool_type = TOOL_TYPE_EXTRUDER;
 
+  // The offset of the tool relative to the arm end
+  float tool_offset[XYZ] = { 0.0 },
+        tool_offset_angle = 0.0,
+        tool_offset_length = 0.0;
+
   bool set_head_index = true;
 
 #endif
@@ -2371,6 +2376,37 @@ static void clean_up_after_endstop_or_probe_move() {
   #if ENABLED(MAKERARM_SCARA)
 
     /**
+     * Get the arm-end position based on the tool position
+     * If the position is unreachable return vector_3 0,0,0
+     */
+    vector_3 tool_point_to_end_point(const float &rx, const float &ry) {
+
+      // Simply can't reach the given point
+      if (HYPOT2(rx, ry) > sq(L1 + L2 + tool_offset_length))
+        return vector_3();
+
+      float pos[XYZ] = { rx, ry, 0 };
+
+      // Get the angles for placing the tool at x, y
+      inverse_kinematics(pos);
+
+      const float curr_tool_offset_length = tool_offset_length,
+                  curr_tool_offset_angle = tool_offset_angle;
+
+      // Temporarily clear the tool offsets
+      tool_offset_length = tool_offset_angle = 0.0;
+
+      // Get the arm-end XY based on the given angles
+      forward_kinematics_SCARA(delta[A_AXIS], delta[B_AXIS]);
+
+      // Restore tool offsets
+      tool_offset_length = curr_tool_offset_length;
+      tool_offset_angle = curr_tool_offset_angle;
+
+      return vector_3(cartes[X_AXIS], cartes[Y_AXIS], 0);
+    }
+
+    /**
      * Get the arm-end position based on the probe position
      * If the position is unreachable return vector_3 0,0,0
      */
@@ -3367,6 +3403,20 @@ bool position_is_reachable(const float target[XYZ]
       dx = point.x;
       dy = point.y;
     }
+    else if (tool_offset_length) {
+      // If the returned point is 0,0,0 the radius test will fail
+      vector_3 point = tool_point_to_end_point(dx, dy);
+      // Is the tool point outside the rectangular bounds?
+      if (!WITHINXY(point.x, point.y)) {
+        // Try the opposite arm orientation
+        arm_orientation = !arm_orientation;
+        point = tool_point_to_end_point(dx, dy);
+        // If still unreachable keep the old arm orientation
+        if (!WITHINXY(point.x, point.y)) arm_orientation = !arm_orientation;
+      }
+      dx = point.x;
+      dy = point.y;
+    }
   #elif HAS_BED_PROBE
     if (by_probe) {
       dx -= X_PROBE_OFFSET_FROM_EXTRUDER;
@@ -3706,8 +3756,11 @@ inline void gcode_G4() {
    * G8: [MakerArm] Set position to home
    */
   inline void gcode_G8() {
-    current_position[X_AXIS] = X_HOME_POS;
-    current_position[Y_AXIS] = Y_HOME_POS;
+    // Apply forward kinematics for front-and-center angles
+    float a = 90, b = 0;
+    forward_kinematics_SCARA(a, b);
+    current_position[X_AXIS] = cartes[X_AXIS];
+    current_position[Y_AXIS] = cartes[Y_AXIS];
     current_position[Z_AXIS] = Z_HOME_POS;
     LOOP_XYZ(i) axis_homed[i] = axis_known_position[i] = true;
     SYNC_PLAN_POSITION_KINEMATIC();
@@ -3725,6 +3778,41 @@ inline void gcode_G4() {
     SERIAL_ECHOPGM("SCARA Arm Orientation: ");
     serialprintPGM(arm_orientation ? PSTR("Right") : PSTR("Left"));
     SERIAL_EOL();
+  }
+
+  /**
+   * G10: Set the current tool offset
+   */
+  inline void gcode_G10() {
+    float old_z_offset = tool_offset[Z_AXIS];
+
+    LOOP_XYZ(i)
+      if (parser.seen(axis_codes[i]))
+        tool_offset[i] = parser.value_float();
+
+    // Get the angle and offset for a tool
+    if (tool_offset[X_AXIS]) {
+      tool_offset_angle = 90 + DEGREES(ATAN2(L2 + tool_offset[Y_AXIS], tool_offset[X_AXIS]));
+      tool_offset_length = L2 + (tool_offset[X_AXIS] < 0 ? -1 : 1) * FABS(tool_offset[Y_AXIS]) / sin(RADIANS(tool_offset_angle));
+    }
+    else {
+      tool_offset_angle = 0;
+      tool_offset_length = tool_offset[Y_AXIS];
+    }
+
+    SERIAL_ECHOPAIR("Tool Offset X:", tool_offset[X_AXIS]);
+    SERIAL_ECHOPAIR(" Y:", tool_offset[Y_AXIS]);
+    SERIAL_ECHOPAIR(" Z:", tool_offset[Z_AXIS]);
+    SERIAL_ECHOPAIR(" Angle:", tool_offset_angle);
+    SERIAL_ECHOLNPAIR(" Length:", tool_offset_length);
+
+    // Set current coordinates for the new tool offset
+    current_position[Z_AXIS] += tool_offset[Z_AXIS] - old_z_offset;
+    get_cartesian_from_steppers();
+    COPY(current_position, cartes);
+    sync_plan_position_kinematic();
+
+    report_current_position();
   }
 
 #endif // MAKERARM_SCARA
@@ -12076,6 +12164,7 @@ void process_parsed_command() {
         case 7: gcode_G7(); break;                                // G7: SCARA Kinematic Test
         case 8: gcode_G8(); break;                                // G8: Force machine to be "homed"
         case 9: gcode_G9(); break;                                // G9: Get/Set Arm Orientation
+        case 10: gcode_G10(); break;                              // G10: Set the tool offset
       #endif
 
       #if ENABLED(CNC_WORKSPACE_PLANES)
@@ -13840,10 +13929,19 @@ void prepare_move_to_destination() {
   void forward_kinematics_SCARA(const float &a, const float &b) {
 
     // Sine for Y offsets, Cosine for X offsets
-    float sin_a  = sin(RADIANS(a)),   cos_a  = cos(RADIANS(a)),
-          sin_ab = sin(RADIANS(a+b)), cos_ab = cos(RADIANS(a+b));
+    const float sin_a = sin(RADIANS(a)),
+                cos_a = cos(RADIANS(a)),
+                sin_ab = sin(RADIANS(a + b + tool_offset_angle)),
+                cos_ab = cos(RADIANS(a + b + tool_offset_angle));
 
-    if (L1 == L2) {
+    if (tool_offset_length) {
+      const float p2 = L2 + tool_offset_length;
+      // x = Ls × cos(ϕ) + Le × cos(ϕ + θ)
+      // y = Ls × sin(ϕ) + Le × sin(ϕ + θ)
+      cartes[X_AXIS] = L1 * cos_a + p2 * cos_ab + SCARA_OFFSET_X;
+      cartes[Y_AXIS] = L1 * sin_a + p2 * sin_ab + SCARA_OFFSET_Y;
+    }
+    else if (L1 == L2) {
       // x = L × (cos(ϕ) + cos(ϕ + θ))
       // y = L × (sin(ϕ) + sin(ϕ + θ))
       cartes[X_AXIS] = L1 * (cos_a + cos_ab) + SCARA_OFFSET_X;
@@ -13862,6 +13960,7 @@ void prepare_move_to_destination() {
       if (DEBUGGING(SCARA)) {
         SERIAL_ECHOPAIR("  SCARA FK a:", a);
         SERIAL_ECHOPAIR(" b:", b);
+        SERIAL_ECHOPAIR(" tool_offset_angle:", tool_offset_angle);
         SERIAL_ECHOPAIR(" sin_a:", sin_a);
         SERIAL_ECHOPAIR(" cos_a:", cos_a);
         SERIAL_ECHOPAIR(" sin_ab:", sin_ab);
@@ -13901,8 +14000,10 @@ void prepare_move_to_destination() {
 
     // Calculate angles. Use simplified equations for equal length arms
     float angA, angB;
-    if (probe_y_offset) {
-      float p2 = L2 + probe_y_offset, p2_2 = sq(p2);
+    if (probe_y_offset || tool_offset_length) {
+      // Probe offset overrides tool offset
+      float p2 = L2 + (probe_y_offset ? probe_y_offset : tool_offset_length),
+            p2_2 = sq(p2);
       angA = acos((D2 + p2_2 - L1_2) / (2 * p2 * SQRT(D2)));
       angB = acos((D2 - p2_2 - L1_2) / (2 * L1 * p2));
     }
@@ -13917,6 +14018,8 @@ void prepare_move_to_destination() {
 
     delta[A_AXIS] = DEGREES(ATAN2(sy, sx) + (arm_orientation ? angA - angB : angB - angA));
     delta[B_AXIS] = DEGREES(arm_orientation ? angB : -angB);
+
+    if (tool_offset_angle && !probe_y_offset) delta[B_AXIS] += tool_offset_angle;
 
     // Only allow A angles from -90 to +270
     if (delta[A_AXIS] < 0) delta[A_AXIS] += 360.0;

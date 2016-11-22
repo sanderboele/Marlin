@@ -249,6 +249,8 @@
   #error "MEASURED_(UPPER|LOWER)_LIMIT is now FILWIDTH_ERROR_MARGIN. Please update your configuration."
 #elif defined(AUTOMATIC_CURRENT_CONTROL)
   #error "AUTOMATIC_CURRENT_CONTROL is now MONITOR_DRIVER_STATUS. Please update your configuration."
+#elif ENABLED(MAKERARM_SCARA) && ENABLED(FWRETRACT)
+  #error "MakerArm is incompatible with FWRETRACT because G10 sets the tool offset."
 #endif
 
 /**
