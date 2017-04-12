@@ -40,6 +40,14 @@
   #include "serial.h"
 #endif
 
+#if ENABLED(PATH_CONTROL_MODES)
+  enum PathControlMode {
+    PCM_INVERSE_TIME,       // G93
+    PCM_UNITS_PER_MINUTE,   // G94
+    PCM_UNITS_PER_REV       // G95
+  };
+#endif
+
 /**
  * GCode parser
  *
@@ -76,6 +84,10 @@ public:
 
   #if ENABLED(TEMPERATURE_UNITS_SUPPORT)
     static TempUnit input_temp_units;
+  #endif
+
+  #if ENABLED(PATH_CONTROL_MODES)
+    static PathControlMode path_control_mode;
   #endif
 
   // Command line state
@@ -312,7 +324,11 @@ public:
 
   #endif // !TEMPERATURE_UNITS_SUPPORT
 
-  FORCE_INLINE static float value_feedrate() { return value_linear_units(); }
+  #if ENABLED(PATH_CONTROL_MODES)
+    static float value_feedrate();
+  #else
+    FORCE_INLINE static float value_feedrate() { return value_linear_units(); }
+  #endif
 
   void unknown_command_error();
 
