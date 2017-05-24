@@ -10682,6 +10682,52 @@ inline void gcode_M502() {
   }
 
   /**
+   * M440: Directly set PWM for Timer 5 testing
+   *
+   *  F<Hz> - Frequency (0 for firmware default)
+   *  A<dc> - Duty cycle for A (D46)
+   *  B<dc> - Duty cycle for B (D45)
+   *  C<dc> - Duty cycle for C (D44)
+   *
+   * Use a negative duty cycle value for Inverted PWM.
+   */
+  inline void gcode_M440() {
+    static uint16_t DCA = 0, DCB = 0, DCC = 0, F = 0;
+    const float freq = parser.seen('F') ? parser.value_float() : NAN,
+                 dca = parser.seen('A') ? parser.value_float() * 0.01 : NAN,
+                 dcb = parser.seen('B') ? parser.value_float() * 0.01 : NAN,
+                 dcc = parser.seen('C') ? parser.value_float() * 0.01 : NAN;
+
+    if (!isnan(freq) || !isnan(dca) || !isnan(dcb) || !isnan(dcc)) {
+      uint8_t err = 0;
+      if (!isnan(freq) && freq > float(F_CPU / 10)) {
+        SERIAL_ERROR_START();
+        SERIAL_ERRORLNPGM("Frequency too high.");
+        ++err;
+      }
+      if ((!isnan(dca) && FABS(dca) > 1.0) || (!isnan(dcb) && FABS(dcb) > 1.0) || (!isnan(dcc) && FABS(dcc) > 1.0)) {
+        SERIAL_ERROR_START();
+        SERIAL_ERRORLNPGM("Set duty cycles between -100 and 100");
+        ++err;
+      }
+      if (err) return;
+
+      if (!isnan(freq)) F = freq;
+      if (!isnan(dca)) DCA = dca;
+      if (!isnan(dcb)) DCB = dcb;
+      if (!isnan(dcc)) DCC = dcc;
+      set_pwm_frequency_hz(F, DCA, DCB, DCC);
+    }
+    else {
+      SERIAL_ECHO_START();
+      SERIAL_ECHOPAIR("Timer 5 F=", isnan(F) ? 0. : F);
+      SERIAL_ECHOPAIR(" DCA=", isnan(DCA) ? 0. : DCA);
+      SERIAL_ECHOPAIR(" DCB=", isnan(DCB) ? 0. : DCB);
+      SERIAL_ECHOLNPAIR(" DCC=", isnan(DCC) ? 0. : DCC);
+    }
+  }
+
+  /**
    * M450: Set and/or report current tool type
    *
    *  S<type> - The new tool type
@@ -12652,6 +12698,8 @@ void process_parsed_command() {
       #endif
 
       #if ENABLED(MAKERARM_SCARA)
+        case 440: gcode_M440(); break;                            // M440: Set Timer 5 PWM directly
+
         case 450: gcode_M450(); break;                            // M450: Report current tool type
         case 451: gcode_M451(); break;                            // M451: Select FFF printer mode
         case 452: gcode_M452(); break;                            // M452: Select Laser printer mode
