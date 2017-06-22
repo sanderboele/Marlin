@@ -869,6 +869,10 @@ void Planner::_buffer_steps(const int32_t (&target)[XYZE]
     block->steps[X_AXIS] = labs(da);
     block->steps[B_AXIS] = labs(db + dc);
     block->steps[C_AXIS] = labs(db - dc);
+  #elif IS_SCARA
+    block->steps[A_AXIS] = labs(da);
+    block->steps[B_AXIS] = labs(db);
+    block->steps[Z_AXIS] = labs(dc);
   #else
     // default non-h-bot planning
     block->steps[A_AXIS] = labs(da);
@@ -901,10 +905,10 @@ void Planner::_buffer_steps(const int32_t (&target)[XYZE]
 
   #if ENABLED(AUTO_POWER_CONTROL)
     if (block->steps[X_AXIS] || block->steps[Y_AXIS] || block->steps[Z_AXIS])
-        powerManager.power_on();
+      powerManager.power_on();
   #endif
 
-  //enable active axes
+  // Enable active axes
   #if CORE_IS_XY
     if (block->steps[A_AXIS] || block->steps[B_AXIS]) {
       enable_X();

@@ -12993,7 +12993,9 @@ void set_current_from_steppers_for_axis(const AxisEnum axis) {
    * For Unified Bed Leveling (Delta or Segmented Cartesian)
    * the ubl.prepare_segmented_line_to method replaces this.
    */
-  inline bool prepare_kinematic_move_to(const float (&rtarget)[XYZE]) {
+  inline bool prepare_kinematic_move_to(const float (&cart)[XYZE]) {
+
+    float rtarget[XYZE] = { cart[X_AXIS], cart[Y_AXIS], cart[Z_AXIS], cart[E_AXIS] };
 
     // Get the top feedrate of the move in the XY plane
     const float _feedrate_mm_s = MMS_SCALED(feedrate_mm_s);
@@ -13054,7 +13056,6 @@ void set_current_from_steppers_for_axis(const AxisEnum axis) {
     // Get the current position as starting point
     float raw[XYZE];
     COPY(raw, current_position);
-
 
     // Calculate and execute the segments
     while (--segments) {
