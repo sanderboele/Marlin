@@ -12973,6 +12973,18 @@ void set_current_from_steppers_for_axis(const AxisEnum axis) {
 #if IS_KINEMATIC
 
   /**
+   * Before raising this value, use M665 S[seg_per_sec] to decrease
+   * the number of segments-per-second. Default is 200. Some deltas
+   * do better with 160 or lower. It would be good to know how many
+   * segments-per-second are actually possible for MakerArm
+   *
+   * Longer segments result in less kinematic overhead
+   * but may produce jagged lines. Try 0.5mm, 1.0mm, and 2.0mm
+   * and compare the difference.
+   */
+  #define SCARA_MIN_SEGMENT_LENGTH 0.5
+
+  /**
    * Prepare a linear move in a DELTA or SCARA setup.
    *
    * This calls planner.buffer_line several times, adding
@@ -13016,9 +13028,9 @@ void set_current_from_steppers_for_axis(const AxisEnum axis) {
     // gives the number of segments
     uint16_t segments = delta_segments_per_second * seconds;
 
-    // For SCARA minimum segment size is 0.25mm
+    // For SCARA enforce a minimum segment size
     #if IS_SCARA
-      NOMORE(segments, cartesian_mm * 4);
+      NOMORE(segments, cartesian_mm * (1.0 / SCARA_MIN_SEGMENT_LENGTH));
     #endif
 
     // At least one segment is required
