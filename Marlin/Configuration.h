@@ -548,7 +548,7 @@
 #define USE_ZMIN_PLUG
 //#define USE_XMAX_PLUG
 //#define USE_YMAX_PLUG
-//#define USE_ZMAX_PLUG
+#define USE_ZMAX_PLUG
 
 // Enable pullup for all endstops to prevent a floating state
 #define ENDSTOPPULLUPS
@@ -653,7 +653,7 @@
   #define E_GEARBOX_RATIO    1     // Direct drive
   #define E_GEAR_DIAMETER   11.181 // Calibrated 2017-06-28
 
-  #define MAKERARM_MAX_Z   193.5
+  #define MAKERARM_MAX_Z   188
 
 #endif
 
@@ -933,7 +933,7 @@
 // :[-1,1]
 #define X_HOME_DIR -1
 #define Y_HOME_DIR -1
-#define Z_HOME_DIR -1
+#define Z_HOME_DIR  1
 
 // @section machine
 
@@ -1191,7 +1191,7 @@
 // For DELTA this is the top-center of the Cartesian print volume.
 #define MANUAL_X_HOME_POS 0
 #define MANUAL_Y_HOME_POS 400
-#define MANUAL_Z_HOME_POS 0
+//#define MANUAL_Z_HOME_POS 0
 
 // Use "Z Safe Homing" to avoid homing with a Z probe outside the bed area.
 //

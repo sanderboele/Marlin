@@ -3108,7 +3108,7 @@ static void homeaxis(const AxisEnum axis) {
 
   #if IS_SCARA
     // Only Z homing (with probe) is permitted
-    if (axis != Z_AXIS) { BUZZ(100, 880); return; }
+    if (axis != Z_AXIS) goto SCARA_SKIP_XY;
   #else
     #define CAN_HOME(A) \
       (axis == A##_AXIS && ((A##_MIN_PIN > -1 && A##_HOME_DIR < 0) || (A##_MAX_PIN > -1 && A##_HOME_DIR > 0)))
@@ -3123,6 +3123,7 @@ static void homeaxis(const AxisEnum axis) {
     }
   #endif
 
+  {
   const int axis_home_dir =
     #if ENABLED(DUAL_X_CARRIAGE)
       (axis == X_AXIS) ? x_home_dir(active_extruder) :
@@ -3210,9 +3211,11 @@ static void homeaxis(const AxisEnum axis) {
       }
     #endif
   #endif
+  }
 
   #if IS_SCARA
 
+    SCARA_SKIP_XY:
     set_axis_is_at_home(axis);
     SYNC_PLAN_POSITION_KINEMATIC();
 
