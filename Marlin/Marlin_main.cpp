@@ -13351,6 +13351,23 @@ void set_current_from_steppers_for_axis(const AxisEnum axis) {
     // Fail if attempting move outside printable radius
     if (!position_is_reachable(rtarget[X_AXIS], rtarget[Y_AXIS])) return true;
 
+    #if ENABLED(PICK_AND_PLACE) && IS_SCARA
+      //
+      // For MakerArm pick-and-place, S_AXIS automatically
+      // maintains its angle relative to the build area.
+      //
+      // This auto-rotates the picker (connected to E1).
+      //
+      // rtarget[S_AXIS] contains the destination area-relative angle.
+      // Angular rotation will be interpolated through the whole move.
+      //
+      if (tool_type == TOOL_TYPE_PICKER) {
+        // Subtract the angular change from the target angle since moving AB also rotates "S"
+        inverse_kinematics(rtarget);
+        rtarget[S_AXIS] -= (delta[A_AXIS] + delta[B_AXIS]) - (stepper.get_axis_position_mm(A_AXIS) + stepper.get_axis_position_mm(B_AXIS));
+      }
+    #endif
+
     // Remaining cartesian distances
     const float zdiff = rtarget[Z_AXIS] - current_position[Z_AXIS],
                 ediff = rtarget[E_AXIS] - current_position[E_AXIS];
@@ -13361,23 +13378,6 @@ void set_current_from_steppers_for_axis(const AxisEnum axis) {
     float cartesian_mm = SQRT(sq(xdiff) + sq(ydiff) + sq(zdiff));
     if (UNEAR_ZERO(cartesian_mm)) cartesian_mm = FABS(ediff);
     if (UNEAR_ZERO(cartesian_mm)) return true;
-
-    #if ENABLED(PICK_AND_PLACE) && IS_SCARA
-      //
-      // For MakerArm pick-and-place, S_AXIS automatically
-      // maintains its angle relative to the build area.
-      //
-      // This auto-rotates the picker (connected to E1).
-      //
-      // ltarget[S_AXIS] contains the destination area-relative angle.
-      // Angular rotation will be interpolated through the whole move.
-      //
-      if (tool_type == TOOL_TYPE_PICKER) {
-        // Subtract the angular change from the target angle since moving AB also rotates "S"
-        inverse_kinematics(ltarget);
-        ltarget[S_AXIS] -= (delta[A_AXIS] + delta[B_AXIS]) - (stepper.get_axis_position_mm(A_AXIS) + stepper.get_axis_position_mm(B_AXIS));
-      }
-    #endif
 
     // Minimum number of seconds to move the given distance
     const float seconds = cartesian_mm / _feedrate_mm_s;
