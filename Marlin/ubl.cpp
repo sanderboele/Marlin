@@ -175,6 +175,11 @@
   // 2 : disply of the map data on a RepRap Graphical LCD Panel
 
   void unified_bed_leveling::display_map(const int map_type) {
+    #if ENABLED(AUTO_REPORT_TEMPERATURES)
+      const uint8_t saved_auto_report_temp_interval = thermalManager.auto_report_temp_interval;
+      thermalManager.auto_report_temp_interval = 0;
+    #endif
+
     constexpr uint8_t spaces = 8 * (GRID_MAX_POINTS_X - 2);
 
     SERIAL_PROTOCOLPGM("\nBed Topography Report");
@@ -242,6 +247,10 @@
       serial_echo_xy(GRID_MAX_POINTS_X - 1, 0);
       SERIAL_EOL();
     }
+
+    #if ENABLED(AUTO_REPORT_TEMPERATURES)
+      thermalManager.auto_report_temp_interval = saved_auto_report_temp_interval;
+    #endif
   }
 
   bool unified_bed_leveling::sanity_check() {
