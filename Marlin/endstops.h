@@ -75,7 +75,7 @@ class Endstops {
     static void M119();
 
     // Enable / disable endstop checking globally
-    static void enable_globally(bool onoff=true) { enabled_globally = enabled = onoff; }
+    static void enable_globally(bool onoff=true) { enabled_globally = enabled = onoff; endstop_hit_bits = 0; }
 
     // Enable / disable endstop checking
     static void enable(bool onoff=true) { enabled = onoff; }

@@ -664,7 +664,7 @@
   #endif
 
   // Endstops and bed probe
-  #if ENABLED(MAKERARM_SCARA)
+  #if ENABLED(MAKERARM_SCARA) && DISABLED(OLD_MAKERARM_PROTO) && DISABLED(MAKERARM_TMC2130)
     #define HAS_X_MIN false
     #define HAS_X_MAX false
     #define HAS_Y_MIN false

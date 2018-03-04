@@ -3982,7 +3982,7 @@ inline void gcode_G4() {
   }
 #endif // NOZZLE_PARK_FEATURE
 
-#if ENABLED(QUICK_HOME)
+#if ENABLED(QUICK_HOME) && IS_CARTESIAN
 
   static void quick_home_xy() {
 
@@ -4230,7 +4230,79 @@ inline void gcode_G4() {
     return true;
   }
 
-#endif // DELTA
+#elif IS_SCARA
+
+  /**
+   * A SCARA homes each arm segment
+   * Endstops should already be set to interrupt the move.
+   */
+
+  constexpr float SCARA_HOME_ANGLE_A = 180.0,
+                  SCARA_HOME_ANGLE_B = 147.5;
+
+  inline bool home_scara_ab(const bool homeA, const bool homeB) {
+    #if ENABLED(DEBUG_LEVELING_FEATURE)
+      if (DEBUGGING(LEVELING)) DEBUG_POS(">>> home_scara_ab", current_position);
+    #endif
+
+    // A and B home in the negative
+
+    // Start the angles at A-180 B0
+    if (homeA) stepper.set_position(A_AXIS, -130 * X_HOME_DIR);
+    if (homeB) stepper.set_position(B_AXIS, -155 * Y_HOME_DIR);
+
+    // Move A and B as far as they can go
+    float target[ABCE] = {
+      homeA ? 260 * X_HOME_DIR : stepper.get_axis_position_degrees(A_AXIS),
+      homeB ? 155 * Y_HOME_DIR : stepper.get_axis_position_degrees(B_AXIS),
+      current_position[Z_AXIS], current_position[E_AXIS]
+    };
+
+    // Move A and/or B until an endstop is hit.
+    feedrate_mm_s = homing_feedrate(A_AXIS);
+    plan_direct_stepper_move(target);
+    stepper.synchronize();
+
+    // Get cartesian from steppers and tell the planner
+    set_current_from_steppers_for_axis(ALL_AXES);
+    SYNC_PLAN_POSITION_KINEMATIC();
+
+    // After a move interruption we need to reset the
+    //target[A_AXIS] = stepper.get_axis_position_degrees(A_AXIS);
+    //target[B_AXIS] = stepper.get_axis_position_degrees(B_AXIS);
+
+    // If only one was triggered, finish the other
+    const uint8_t hits = Endstops::endstop_hit_bits;
+    if (homeA && homeB && TEST(hits, X_MAX) != TEST(hits, Y_MAX)) {
+      const AxisEnum axis = TEST(hits, X_MAX) ? A_AXIS : B_AXIS;
+      target[axis] = stepper.get_axis_position_degrees(axis); // hit axis stays still
+      plan_direct_stepper_move(target);
+    }
+
+    endstops.hit_on_purpose();
+
+    if (homeA) {
+      axis_homed[A_AXIS] = axis_known_position[A_AXIS] = true;
+      stepper.set_position(A_AXIS, SCARA_HOME_ANGLE_A * planner.axis_steps_per_mm[A_AXIS]);
+    }
+    if (homeB) {
+      axis_homed[B_AXIS] = axis_known_position[B_AXIS] = true;
+      stepper.set_position(B_AXIS, SCARA_HOME_ANGLE_B * planner.axis_steps_per_mm[B_AXIS]);
+    }
+
+    // Work backward from known home angles to Cartesian XYZ
+    arm_orientation = Y_HOME_DIR > 0 ? RIGHT_ARM : LEFT_ARM;
+    set_current_from_steppers_for_axis(ALL_AXES);
+    SYNC_PLAN_POSITION_KINEMATIC();
+
+    #if ENABLED(DEBUG_LEVELING_FEATURE)
+      if (DEBUGGING(LEVELING)) DEBUG_POS("<<< home_scara_ab", current_position);
+    #endif
+
+    return true;
+  }
+
+#endif
 
 #if ENABLED(Z_SAFE_HOMING)
 
@@ -4363,6 +4435,17 @@ inline void gcode_G28(const bool always_home_all) {
 
     home_delta();
     UNUSED(always_home_all);
+
+  #elif ENABLED(MAKERARM_SCARA)
+
+    const bool homeA = always_home_all || parser.seen('X') || parser.seen('A'),
+               homeB = always_home_all || parser.seen('Y') || parser.seen('B'),
+               homeZ = always_home_all || parser.seen('Z'),
+               home_all = (!homeA && !homeB && !homeZ) || (homeA && homeB && homeZ);
+
+    if (home_all || homeZ) HOMEAXIS(Z);
+
+    home_scara_ab(home_all || homeA, home_all || homeB);
 
   #else // NOT DELTA
 
