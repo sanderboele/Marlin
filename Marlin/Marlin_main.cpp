@@ -348,6 +348,12 @@
   #include "twibus.h"
 #endif
 
+#if IR_PROBE
+  #include <Wire.h>
+  #include <VCNL4020.h>
+  VCNL4020 vcnl;
+#endif
+
 #if ENABLED(I2C_POSITION_ENCODERS)
   #include "I2CPositionEncoder.h"
 #endif
@@ -570,6 +576,15 @@ uint8_t target_extruder;
 
 #if HAS_BED_PROBE
   float zprobe_zoffset; // Initialized by settings.load()
+#endif
+
+#if IR_PROBE
+  uint8_t   ID = 0;
+  uint8_t   Command = 0;
+  uint16_t  ProxiValue = 0;
+  //uint16_t  AmbiValue = 0;
+  uint8_t   InterruptStatus = 0;
+  uint8_t   InterruptControl = 0;
 #endif
 
 #if HAS_ABL
@@ -2152,7 +2167,7 @@ static void clean_up_after_endstop_or_probe_move() {
     // Make room for probe to deploy (or stow)
     // Fix-mounted probe should only raise for deploy
     if (
-      #if ENABLED(FIX_MOUNTED_PROBE)
+      #if ENABLED(FIX_MOUNTED_PROBE) || ENABLED(IR_PROBE)
         deploy
       #else
         true
@@ -4038,6 +4053,8 @@ inline void gcode_G4() {
     SERIAL_ECHOPGM("Probe: ");
     #if ENABLED(PROBE_MANUALLY)
       SERIAL_ECHOLNPGM("PROBE_MANUALLY");
+    #elif ENABLED(IR_PROBE)
+      SERIAL_ECHOLNPGM("IR_PROBE");
     #elif ENABLED(FIX_MOUNTED_PROBE)
       SERIAL_ECHOLNPGM("FIX_MOUNTED_PROBE");
     #elif ENABLED(BLTOUCH)
@@ -15111,6 +15128,24 @@ void setup() {
     #endif
 
   #endif // PICK_AND_PLACE
+  
+  vcnl.SetCommandRegister(COMMAND_ALL_DISABLE);
+  
+  if (!vcnl.begin()) while (1);
+
+  SERIAL_ECHOLNPGM("IR IS FOUND");  
+
+  #if IR_PROBE
+    vcnl.SetCommandRegister(COMMAND_ALL_DISABLE);
+    vcnl.SetProximityRate(PROX_MEASUREMENT_RATE_31);
+    vcnl.SetCommandRegister(COMMAND_PROX_ENABLE | COMMAND_SELFTIMED_MODE_ENABLE);
+
+    vcnl.SetInterruptControl(INTERRUPT_THRES_SEL_PROX | INTERRUPT_THRES_ENABLE | INTERRUPT_COUNT_EXCEED_1 );
+    InterruptControl = vcnl.ReadInterruptControl();
+    
+    ProxiValue = vcnl.readProximity();
+    vcnl.SetHighThreshold(10000);
+  #endif // IR_PROBE
 }
 
 /**
@@ -15124,6 +15159,17 @@ void setup() {
  *  - Call LCD update
  */
 void loop() {
+
+  ProxiValue = vcnl.readProximity();
+  InterruptStatus = vcnl.ReadInterruptStatus();
+  SERIAL_PROTOCOLLNPAIR("Proximity: ", ProxiValue);
+  SERIAL_PROTOCOLLNPAIR("InterruptStatus: ", InterruptStatus);
+
+  //check interrupt status for High Threshold
+  if (InterruptStatus & INTERRUPT_MASK_STATUS_THRES_HI) {
+    delay(1);
+    vcnl.SetInterruptStatus (InterruptStatus);
+  }
 
   // #ifdef OSCILLOSCOPE_PIN_A
   //   static uint8_t test_state = HIGH;

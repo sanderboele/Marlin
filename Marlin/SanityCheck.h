@@ -683,6 +683,9 @@ static_assert(1 >= 0
   #if ENABLED(FIX_MOUNTED_PROBE)
     + 1
   #endif
+  #if ENABLED(IR_PROBE)
+    + 1
+  #endif
   #if HAS_Z_SERVO_ENDSTOP && DISABLED(BLTOUCH)
     + 1
   #endif
@@ -698,7 +701,7 @@ static_assert(1 >= 0
   #if ENABLED(Z_PROBE_SLED)
     + 1
   #endif
-  , "Please enable only one probe option: PROBE_MANUALLY, FIX_MOUNTED_PROBE, BLTOUCH, SOLENOID_PROBE, Z_PROBE_ALLEN_KEY, Z_PROBE_SLED, or Z Servo."
+  , "Please enable only one probe option: PROBE_MANUALLY, IR_PROBE, FIX_MOUNTED_PROBE, BLTOUCH, SOLENOID_PROBE, Z_PROBE_ALLEN_KEY, Z_PROBE_SLED, or Z Servo."
 );
 
 #if HAS_BED_PROBE

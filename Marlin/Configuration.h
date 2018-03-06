@@ -823,6 +823,11 @@
 #define FIX_MOUNTED_PROBE
 
 /**
+ * Infrared Probe based on VCNL4020
+ */
+#define IR_PROBE
+
+/**
  * Z Servo Probe, such as an endstop switch on a rotating arm.
  */
 //#define Z_ENDSTOP_SERVO_NR 0   // Defaults to SERVO 0 connector.
